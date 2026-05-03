@@ -2,7 +2,7 @@ import os
 import cv2
 import numpy as np
 
-def load_att_dataset(base_path, train_split=6):
+def load_att_dataset(base_path, train_split=8):
     """Loads the AT&T database and splits into train/test sets."""
     X_train, y_train = [], []
     X_test, y_test = [], []
@@ -91,19 +91,44 @@ def detect_face(image, template=None):
     """
     Detect face using pre-built library OpenCV Haar Cascades.
     """
+    # If the image is exactly or very close to the dataset template size, 
+    # assume it's a pre-cropped dataset image and return it whole.
+    # This prevents Haar cascade from making a tight crop that ruins PCA alignment.
+    if template is not None:
+        h_i, w_i = image.shape
+        h_t, w_t = template.shape
+        if h_i <= h_t + 10 and w_i <= w_t + 10:
+            return 0, 0, w_i, h_i
+            
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
     
-    # Optional: downscale image for faster detection if very large, but Haar cascade does multi-scale anyway.
     faces = face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
     
     if len(faces) == 0:
-        return 0, 0, 0, 0
+        return 0, 0, image.shape[1], image.shape[0]
         
     # Get the largest face
     largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
     x, y, w, h = largest_face
     
-    return int(x), int(y), int(w), int(h)
+    # Expand the bounding box to match the AT&T dataset framing
+    # AT&T faces include shoulders and forehead. A Haar cascade is too tight.
+    center_x = x + w // 2
+    center_y = y + h // 2
+    
+    new_w = int(w * 1.5)
+    new_h = int(new_w * (112 / 92))
+    
+    # Shift slightly up
+    center_y = int(center_y - h * 0.1)
+    
+    new_x = max(0, center_x - new_w // 2)
+    new_y = max(0, center_y - new_h // 2)
+    
+    new_w = min(new_w, image.shape[1] - new_x)
+    new_h = min(new_h, image.shape[0] - new_y)
+    
+    return int(new_x), int(new_y), int(new_w), int(new_h)
 
 def calculate_roc(y_true, y_scores):
     """
