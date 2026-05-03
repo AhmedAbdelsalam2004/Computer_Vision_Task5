@@ -87,67 +87,23 @@ class EigenFaceRecognizer:
                 
         return np.array(binary_labels), np.array(scores)
 
-def detect_face(image, template):
+def detect_face(image, template=None):
     """
-    Detect face using Normalized Cross-Correlation (NCC) from scratch.
-    Uses a memory-efficient strided loop to prevent RAM spikes.
+    Detect face using pre-built library OpenCV Haar Cascades.
     """
-    h_i, w_i = image.shape
-    h_t, w_t = template.shape
+    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
     
-    if h_i < h_t or w_i < w_t:
-        return 0, 0, w_i, h_i
-
-    # Downscale for performance if image is very large
-    scale = 1.0
-    while max(image.shape) > 400:
-        image = cv2.resize(image, (image.shape[1]//2, image.shape[0]//2))
-        scale *= 2.0
+    # Optional: downscale image for faster detection if very large, but Haar cascade does multi-scale anyway.
+    faces = face_cascade.detectMultiScale(image, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    
+    if len(faces) == 0:
+        return 0, 0, 0, 0
         
-    h_i, w_i = image.shape
+    # Get the largest face
+    largest_face = max(faces, key=lambda rect: rect[2] * rect[3])
+    x, y, w, h = largest_face
     
-    # If after scaling it's smaller, adjust template
-    if h_i < h_t or w_i < w_t:
-        template = cv2.resize(template, (w_i, h_i))
-        h_t, w_t = template.shape
-
-    t_mean = np.mean(template)
-    t_centered = template - t_mean
-    t_norm = np.linalg.norm(t_centered)
-    
-    if t_norm == 0:
-        return 0, 0, w_i, h_i
-        
-    t_centered /= t_norm
-
-    best_cc = -2
-    best_x, best_y = 0, 0
-    
-    # Stride of 4 pixels to speed up search and save compute
-    step = 4
-    
-    for y in range(0, h_i - h_t + 1, step):
-        for x in range(0, w_i - w_t + 1, step):
-            window = image[y:y+h_t, x:x+w_t]
-            w_mean = np.mean(window)
-            w_centered = window - w_mean
-            w_norm = np.linalg.norm(w_centered)
-            
-            if w_norm == 0: 
-                w_norm = 1e-10
-                
-            cc = np.sum(w_centered * t_centered) / w_norm
-            if cc > best_cc:
-                best_cc = cc
-                best_x, best_y = x, y
-    
-    # Scale back
-    x_orig = int(best_x * scale)
-    y_orig = int(best_y * scale)
-    w_orig = int(w_t * scale)
-    h_orig = int(h_t * scale)
-    
-    return x_orig, y_orig, w_orig, h_orig
+    return int(x), int(y), int(w), int(h)
 
 def calculate_roc(y_true, y_scores):
     """
