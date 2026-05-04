@@ -9,6 +9,7 @@ const API_BASE = 'http://localhost:8000/api';
 function App() {
   const [status, setStatus] = useState('offline');
   const [rocData, setRocData] = useState(null);
+  const [eigenfaces, setEigenfaces] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [result, setResult] = useState(null);
@@ -33,6 +34,17 @@ function App() {
     }
   }, []);
 
+  const fetchEigenfaces = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/eigenfaces`);
+      if (!res.data.error) {
+        setEigenfaces(res.data);
+      }
+    } catch {
+      console.error("Error fetching Eigenfaces.");
+    }
+  }, []);
+
   const checkServer = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE}/status`);
@@ -40,10 +52,13 @@ function App() {
       if (res.data.trained && !rocData) {
         fetchRoc();
       }
+      if (res.data.trained && !eigenfaces) {
+        fetchEigenfaces();
+      }
     } catch {
       setStatus('offline');
     }
-  }, [rocData, fetchRoc]);
+  }, [rocData, fetchRoc, eigenfaces, fetchEigenfaces]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -113,6 +128,38 @@ function App() {
             {status.toUpperCase()}
           </div>
         </div>
+        {eigenfaces && (
+          <div className="glass-panel" style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            <h3 style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <ImageIcon size={16} /> EXTRACTED EIGENFACES
+            </h3>
+            
+            <div style={{ marginBottom: '16px' }}>
+              <h4 style={{ fontSize: '0.75rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Mean Face</h4>
+              <img 
+                src={`data:image/png;base64,${eigenfaces.mean_face}`} 
+                alt="Mean Face" 
+                style={{ width: '80px', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--glass-border)' }} 
+              />
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', paddingRight: '4px' }} className="custom-scrollbar">
+              <h4 style={{ fontSize: '0.75rem', marginBottom: '8px', color: 'var(--text-secondary)' }}>Top Eigenfaces</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
+                {eigenfaces.eigenfaces.map((ef, idx) => (
+                  <div key={idx} style={{ textAlign: 'center' }}>
+                    <img 
+                      src={`data:image/png;base64,${ef}`} 
+                      alt={`Eigenface ${idx + 1}`} 
+                      style={{ width: '100%', height: '100px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--glass-border)' }} 
+                    />
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '4px' }}>EF {idx + 1}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </aside>
 
       <main className="main-content">
@@ -193,6 +240,8 @@ function App() {
             </div>
           </div>
         </section>
+
+
 
         {rocData && (
           <section className="glass-panel" style={{ padding: '32px' }}>
